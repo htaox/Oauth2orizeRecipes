@@ -6,7 +6,9 @@ const cookieParser   = require('cookie-parser');
 const config         = require('./config');
 const db             = require('./db');
 const express        = require('express');
+const redis = require('redis');
 const expressSession = require('express-session');
+const RedisStore = require('connect-redis')(expressSession);
 const fs             = require('fs');
 const https          = require('https');
 const oauth2         = require('./oauth2');
@@ -16,16 +18,28 @@ const site           = require('./site');
 const token          = require('./token');
 const user           = require('./user');
 
-console.log('Using MemoryStore for the data store');
-console.log('Using MemoryStore for the Session');
-const MemoryStore = expressSession.MemoryStore;
+// console.log('Using MemoryStore for the data store');
+// console.log('Using MemoryStore for the Session');
+// const MemoryStore = expressSession.MemoryStore;
+
+const redisClient = redis.createClient(config.port, config.host, { no_ready_check: true });
+// const redisStore = new db.RedisStore({ redis: client });
 
 // Express configuration
 const app = express();
 app.set('view engine', 'ejs');
 app.use(cookieParser());
 
+/*
+// Make our redisStore accessible to our router.
+app.use(function(req, res, next){
+  req.redisStore = redisStore;
+  next();
+});
+*/
+
 // Session Configuration
+/*
 app.use(expressSession({
   saveUninitialized : true,
   resave            : true,
@@ -33,6 +47,15 @@ app.use(expressSession({
   store             : new MemoryStore(),
   key               : 'authorization.sid',
   cookie            : { maxAge: config.session.maxAge },
+}));
+*/
+
+app.use(expressSession({
+  cookie: { path: '/',
+  httpOnly: true, maxAge:60000 },
+  store: new RedisStore({ client: redisClient }),
+  secret: config.session.secret,
+  key: 'authorization.sid'
 }));
 
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -101,6 +124,6 @@ const options = {
   cert : fs.readFileSync(path.join(__dirname, 'certs/certificate.pem')),
 };
 
-// Create our HTTPS server listening on port 3000.
-https.createServer(options, app).listen(3000);
-console.log('OAuth 2.0 Authorization Server started on port 3000');
+// Create our HTTPS server listening on port 4444.
+https.createServer(options, app).listen(4444);
+console.log('OAuth 2.0 Authorization Server started on port 4444');

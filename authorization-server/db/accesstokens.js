@@ -10,17 +10,18 @@ const jwt = require('jsonwebtoken');
 /**
  * Tokens in-memory data structure which stores all of the access tokens
  */
-let tokens = Object.create(null);
+// let tokens = Object.create(null);
 
 /**
  * Returns an access token if it finds one, otherwise returns null if one is not found.
  * @param   {String}  token - The token to decode to get the id of the access token to find.
  * @returns {Promise} resolved with the token if found, otherwise resolved with undefined
  */
-exports.find = (token) => {
+exports.find = token => {
   try {
     const id = jwt.decode(token).jti;
-    return Promise.resolve(tokens[id]);
+    // return Promise.resolve(tokens[id]);
+    const token = async 
   } catch (error) {
     return Promise.resolve(undefined);
   }
@@ -37,10 +38,16 @@ exports.find = (token) => {
  * @param   {String}  scope          - The scope (optional)
  * @returns {Promise} resolved with the saved token
  */
-exports.save = (token, expirationDate, userID, clientID, scope) => {
+exports.save = (token, expirationDate, userID, clientID, scope = 'offline_access', server) => {
   const id = jwt.decode(token).jti;
-  tokens[id] = { userID, expirationDate, clientID, scope };
-  return Promise.resolve(tokens[id]);
+  // tokens[id] = { userID, expirationDate, clientID, scope };
+  // return Promise.resolve(tokens[id]);
+  
+  const expirationDateVal = expirationDate.getTime();
+
+  return server.store.addToSet('tokens', id)
+    .then(server.store.saveHash({ id, userID, expirationDate: expirationDateVal, clientID, scope }))
+    .catch(Promise.resolve(undefined));
 };
 
 /**
@@ -65,6 +72,7 @@ exports.delete = (token) => {
  * @returns {Promise} resolved with an associative of tokens that were expired
  */
 exports.removeExpired = () => {
+  /*
   const keys    = Object.keys(tokens);
   const expired = keys.reduce((accumulator, key) => {
     if (new Date() > tokens[key].expirationDate) {
@@ -75,6 +83,23 @@ exports.removeExpired = () => {
     return accumulator;
   }, Object.create(null));
   return Promise.resolve(expired);
+  */
+ 
+  server.store.findAllInSet('tokens')
+    .then(tokens => {
+      const fn = function removeIfNeeded(token) {
+        return server.store.findValueInHash(token, 'expirationDate')
+          .then(expirationDate => {
+            if (new Date() > new Date(expirationDate)) {
+              return server.store.removeFromSet('tokens', token)
+                .then(server.store.delete(token));
+            } else {
+              return Promise.resolve(undefined);
+            }
+          }) 
+      };
+      return Promise.all(tokens.map(fn));
+    })
 };
 
 /**
