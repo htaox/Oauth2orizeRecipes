@@ -21,7 +21,9 @@ exports.find = token => {
   try {
     const id = jwt.decode(token).jti;
     // return Promise.resolve(tokens[id]);
-    const token = async 
+    return server.store.findHash(id)
+      .then(sessionToken => Promise.resolve(sessionToken))
+      .catch(reason => Promise.resolve(undefined));     
   } catch (error) {
     return Promise.resolve(undefined);
   }
@@ -58,9 +60,11 @@ exports.save = (token, expirationDate, userID, clientID, scope = 'offline_access
 exports.delete = (token) => {
   try {
     const id = jwt.decode(token).jti;
-    const deletedToken = tokens[id];
-    delete tokens[id];
-    return Promise.resolve(deletedToken);
+    // const deletedToken = tokens[id];
+    // delete tokens[id];
+    // return Promise.resolve(deletedToken);
+    return server.store.removeFromSet('tokens', id)
+      .then(server.store.delete(id));
   } catch (error) {
     return Promise.resolve(undefined);
   }
@@ -71,7 +75,7 @@ exports.delete = (token) => {
  * expired ones it finds.
  * @returns {Promise} resolved with an associative of tokens that were expired
  */
-exports.removeExpired = () => {
+exports.removeExpired = (server) => {
   /*
   const keys    = Object.keys(tokens);
   const expired = keys.reduce((accumulator, key) => {
@@ -99,15 +103,26 @@ exports.removeExpired = () => {
           }) 
       };
       return Promise.all(tokens.map(fn));
-    })
+    });
 };
 
 /**
  * Removes all access tokens.
  * @returns {Promise} resolved with all removed tokens returned
  */
-exports.removeAll = () => {
-  const deletedTokens = tokens;
-  tokens              = Object.create(null);
-  return Promise.resolve(deletedTokens);
+exports.removeAll = (server) => {
+  // const deletedTokens = tokens;
+  // tokens              = Object.create(null);
+  // return Promise.resolve(deletedTokens);
+  // 
+  server.store.findAllInSet('tokens')
+    .then(tokens => {
+      const fn = tokenId => {
+        return server.store.removeFromSet('tokens', token)
+          .then(server.store.delete(token))
+          .catch(reason => Promise.resolve(undefined));
+      };
+
+      return Promise.all(tokens.map(fn));
+    });
 };
